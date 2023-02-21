@@ -4,3 +4,5 @@
 example.py
 run_server.bat
 run_server.bat.bak
+migrations.bat
+tests.bat
