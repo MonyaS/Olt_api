@@ -36,4 +36,5 @@ class UserSerializerTestCase(TestCase):
             'can_edit': False
             },
         ]
+        
         self.assertEquals(expected_data, data)

@@ -80,8 +80,8 @@ def Auth(request):
         else:
             return return_response("Method is not defined.", cookie, user_name)
     except KeyError:
-        return JsonResponse("Some data is wrong.", safe=False)
+        return JsonResponse("Some data is wrong.", safe=False, status=500)
     except (jwt.exceptions.DecodeError, jwt.exceptions.InvalidTokenError):
-        return JsonResponse("Invalid token.", safe=False)
+        return JsonResponse("Invalid token.", safe=False, status=401)
     except Exception as err:
-        return JsonResponse(f"An error occurred: {err}", safe=False)
+        return JsonResponse(f"An error occurred: {err}", safe=False, status=500)

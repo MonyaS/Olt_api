@@ -6,7 +6,6 @@ from django.http.response import JsonResponse
 from rest_framework import status
 from ..models import User
 from ..serializers import UserSerializer
-from django.urls import resolve
 
 from ..auth import Auth
 class AuthentificationTestCase(APITestCase):
@@ -25,17 +24,11 @@ class AuthentificationTestCase(APITestCase):
         request = factory.post( path='/auth', data=data, content_type='application/json')
         request.method = 'LOGIN'
         responce = Auth(request)
-        print(responce.content)
-        print(type(responce.cookies))
-
-
-        request = factory.post(path='/auth', data=data, content_type='application/json' )
-        request.method = 'USER_LIST'
-        request.COOKIES.update(responce.cookies)
-        func,args,kwargs = resolve('/auth')
-        request = func(request)
-        print(request.COOKIES)
-        responce = Auth(request)
+        data = User.objects.values()
+        responsee = []
+        for temp in data:
+            responsee.append(temp)
+        print(responsee)
         self.assertEquals(status.HTTP_200_OK,responce.status_code)
         self.assertEquals("Successfully logged in",responce.content.decode().replace('"',''))
 
