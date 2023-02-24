@@ -9,7 +9,7 @@ from OLT.settings import SECRET_KEY
 from django.contrib.auth.hashers import make_password
 
 class User(AbstractBaseUser):
-    login = models.CharField(max_length=20, unique=True, null=True)
+    login = models.CharField(max_length=20, unique=True, null=True, blank=False)
     password = models.CharField(max_length=50)
     is_superuser = models.BooleanField(default=0)
     can_edit = models.BooleanField(default=0)

@@ -25,9 +25,9 @@ def Auth(request):
         if request.method == 'LOGIN':
             user = User.objects.filter(login=user_data["login"]).first()
             if user is None:
-                return JsonResponse("Login or pass is incorrect", safe=False)
+                return JsonResponse("Login or pass is incorrect", safe=False, status=406)
             if not user.check_password(user_data["password"]):
-                return JsonResponse("Login or pass is incorrect", safe=False)
+                return JsonResponse("Login or pass is incorrect2", safe=False, status=406)
             return return_response("Successfully logged in", user.token, user.login)
 
         cookie = request.COOKIES.get('token')
@@ -41,7 +41,7 @@ def Auth(request):
             raise jwt.exceptions.InvalidTokenError
         if creation_date <= datetime.today() - timedelta(days=1):
             cookie = user.token
-
+            
         if request.method == 'USER_LIST' and user.is_superuser:
             data = User.objects.values()
             response = []
@@ -58,7 +58,7 @@ def Auth(request):
                 return return_response("Wrong data.", cookie, user_name)
 
         elif request.method == 'EDIT_USER' and user.is_superuser:
-            edit_user = User.objects.get(id=user_data["id"])
+            edit_user = User.objects.filter(id=user_data["id"]).first()
             if edit_user:
                 if "password" in user_data.keys():
                     edit_user.set_password(user_data["password"])
@@ -84,4 +84,5 @@ def Auth(request):
     except (jwt.exceptions.DecodeError, jwt.exceptions.InvalidTokenError):
         return JsonResponse("Invalid token.", safe=False, status=401)
     except Exception as err:
+        print(err)
         return JsonResponse(f"An error occurred: {err}", safe=False, status=500)
