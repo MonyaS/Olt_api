@@ -33,3 +33,14 @@ class User(AbstractBaseUser):
     def set_password(self, raw_password):
         self.password = make_password(raw_password)
         self._password = raw_password
+
+
+# 255.255.255.255:65536
+class Olt(models.Model):
+    ip = models.GenericIPAddressField(unique=True, null=False, blank=False)
+    login = models.CharField(max_length=50)
+    password = models.CharField(max_length=100)
+    olt_configuration = models.JSONField()
+
+    # USERNAME_FIELD = 'ip'
+    # REQUIRED_FIELDS = []

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from main.models import User
+from main.models import User, Olt
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -15,3 +15,9 @@ class UserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+    
+class OLTSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Olt
+        fields = ('ip', 'login', 'password', 'olt_configuration')
+

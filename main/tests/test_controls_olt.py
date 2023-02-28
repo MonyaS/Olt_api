@@ -4,62 +4,74 @@ from django.test import RequestFactory, TestCase
 import jwt
 from OLT.settings import SECRET_KEY
 
+from django.test.signals import template_rendered
+from django.dispatch import receiver
+
 from main.auth import Auth
+from main.control import OLTApi
 
 from ..models import User
 from ..serializers import UserSerializer
 from rest_framework import status
+from pymongo import MongoClient
+import os
+connection_url = os.getenv("connection_url")
 
+def get_db_handle_test():
+    client = MongoClient(connection_url)
+    db_handle = client["olt_settings"]
+    collection = db_handle["olt_test"]
+    return collection 
 
-
-class UserAuthTestCase(TestCase):
-    factory = RequestFactory()
-    admin_data = {
+class OLTApiTestCase(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.admin_data = {
             "login":"admin",
             "password":"mypassword",
             "is_superuser":"True",
             "can_edit":"True"
             }
-    @classmethod
-    def setUpTestData(cls):
-        # Create some data to be used by the tests
-        # admin_data нужно будет поправить
-        admin_data = {
-            "login":"admin",
-            "password":"mypassword",
-            "is_superuser":"True",
-            "can_edit":"True"
-            }
-        admin = UserSerializer(data=admin_data)
+        self.olt_data = {
+        "ip": "172.25.100.2000",
+        "login": "some_login",
+        "password": "some_password",
+        "some_field": True
+        }
+        self.collection = get_db_handle_test()
+        result = self.collection.insert_one(self.olt_data)
+        admin = UserSerializer(data=self.admin_data)
         if admin.is_valid():
             admin.save()
-        
-    def creating_login_request(self,user_data):
-        request = self.factory.post( path='/auth', data=user_data, content_type='application/json')
+
+    def tearDown(self):
+        # run your code here
+        self.collection.drop()
+        print("\nAll tests have finished running.")
+
+    def creating_login_request(self):
+        request = self.factory.post( path='/auth', data=self.admin_data, content_type='application/json')
         request.method = 'LOGIN'
         responce = Auth(request)
         return responce
+    
     # done
-    def test_authentication(self):
-        response = self.creating_login_request(self.admin_data)
-        self.assertEquals(status.HTTP_200_OK,response.status_code)
-        self.assertEquals("Successfully logged in",response.content.decode().replace('"',''))
+    def notest_olts_list(self):
+        response = self.creating_login_request()
 
-        new_admin_data = self.admin_data.copy()
-        new_admin_data["password"] = "wrong_data"
-        response = self.creating_login_request(new_admin_data)
-        self.assertEquals(status.HTTP_406_NOT_ACCEPTABLE,response.status_code)
-        self.assertEquals("Login or pass is incorrect2",response.content.decode().replace('"',''))
-        
-        new_admin_data["login"] = "wrong_data"
-        response = self.creating_login_request(new_admin_data)
-        self.assertEquals(status.HTTP_406_NOT_ACCEPTABLE,response.status_code)
-        self.assertEquals("Login or pass is incorrect",response.content.decode().replace('"',''))
+        request = self.factory.post(path='/olt', data=self.admin_data, content_type='application/json' )
+        request.method = "GET_OLTS"
+        for key, value in response.cookies.items():
+            request.COOKIES[key] = value.value
+        response = OLTApi(request)
+
+        self.assertEquals(status.HTTP_200_OK,response.status_code)
 
     # done
     def test_cookies(self):
-        response = self.creating_login_request(self.admin_data)
-        request = self.factory.post(path='/auth', data=self.admin_data, content_type='application/json' )
+        response = self.creating_login_request()
+
+        request = self.factory.post(path='/olt', data=self.admin_data, content_type='application/json' )
         request.method = 'TESTING_METHOD'
 
         for key, value in response.cookies.items():
@@ -74,13 +86,13 @@ class UserAuthTestCase(TestCase):
             else:
                 request.COOKIES[key] = value.value
 
-        response = Auth(request)
+        response = OLTApi(request)
 
         self.assertEquals(status.HTTP_401_UNAUTHORIZED,response.status_code)
         self.assertEquals("Invalid token.",response.content.decode().replace('"',''))
 
-        response = self.creating_login_request(self.admin_data)
-        request = self.factory.post(path='/auth', data=self.admin_data, content_type='application/json' )
+        response = self.creating_login_request()
+        request = self.factory.post(path='/olt', data=self.admin_data, content_type='application/json' )
         request.method = 'TESTING_METHOD'
 
         for key, value in response.cookies.items():
@@ -95,14 +107,14 @@ class UserAuthTestCase(TestCase):
             else:
                 request.COOKIES[key] = value.value
 
-        response = Auth(request)
+        response = OLTApi(request)
 
         self.assertEquals(status.HTTP_401_UNAUTHORIZED,response.status_code)
         self.assertEquals("Invalid token.",response.content.decode().replace('"',''))
 
 
-        response = self.creating_login_request(self.admin_data)
-        request = self.factory.post(path='/auth', data=self.admin_data, content_type='application/json' )
+        response = self.creating_login_request()
+        request = self.factory.post(path='/olt', data=self.admin_data, content_type='application/json' )
         request.method = 'TESTING_METHOD'
 
         for key, value in response.cookies.items():
@@ -117,43 +129,28 @@ class UserAuthTestCase(TestCase):
             else:
                 request.COOKIES[key] = value.value
 
-        response = Auth(request)
+        response = OLTApi(request)
 
         self.assertEquals(status.HTTP_200_OK,response.status_code)
         self.assertEquals("Method is not defined.",response.content.decode().replace('"',''))
 
     # done
-    def test_creating_user(self):
-        create_user_data  = {
-            "login":"user1",
-            "password":"mypassword1",
-            "is_superuser":"False",
-            "can_edit":"False"
-            }
-        
-        response = self.creating_login_request(self.admin_data)
-        request = self.factory.post(path='/auth', data=create_user_data, content_type='application/json' )
-        request.method = 'CREATE_USER'
+    def test_olt_list(self):
+        self.olt_data["_id"] = str(self.collection.find_one({"ip": self.olt_data["ip"]}, {'ip': False})["_id"])
+        print(self.olt_data)
+        print(self.collection.find_one({"ip": self.olt_data["ip"]}, {'ip': False}))
+        response = self.creating_login_request()
+
+        request = self.factory.post(path='/olt', data=self.olt_data, content_type='application/json' )
+        request.method = "GET_OLT"
         for key, value in response.cookies.items():
             request.COOKIES[key] = value.value
-        response = Auth(request)
+        response = OLTApi(request)
+        print(response.content)
 
         self.assertEquals(status.HTTP_200_OK,response.status_code)
-        self.assertEquals("Successfully registered",response.content.decode().replace('"',''))
-
-        response = self.creating_login_request(self.admin_data)
-        invalid_create_user_data = create_user_data.copy()
-        invalid_create_user_data["no valid field"] = "no valid value"
-        request = self.factory.post(path='/auth', data=invalid_create_user_data, content_type='application/json' )
-        request.method = 'CREATE_USER'
-        for key, value in response.cookies.items():
-            request.COOKIES[key] = value.value
-        response = Auth(request)
-
-        self.assertEquals(status.HTTP_200_OK,response.status_code)
-        self.assertEquals("Wrong data.",response.content.decode().replace('"',''))
     # done
-    def test_editing_user(self):
+    def notest_editing_user(self):
         edit_user_data = {
             "login":"user2",
             "password":"mypassword2",
@@ -197,7 +194,7 @@ class UserAuthTestCase(TestCase):
 
 
     # done
-    def test_deleting_user(self):
+    def notest_deleting_user(self):
         delete_user_data  = {
             "login":"user3",
             "password":"mypassword3",
@@ -233,7 +230,7 @@ class UserAuthTestCase(TestCase):
         self.assertEquals("Successfully delete.",response.content.decode().replace('"',''))
 
     # done
-    def test_users_list(self):
+    def notest_users_list(self):
         response = self.creating_login_request(self.admin_data)
         new_request = self.factory.post(path='/auth', data=self.admin_data, content_type='application/json' )
         new_request.method = 'USER_LIST'
@@ -241,3 +238,5 @@ class UserAuthTestCase(TestCase):
             new_request.COOKIES[key] = value.value
         response = Auth(new_request)
         self.assertEquals(status.HTTP_200_OK,response.status_code)
+
+

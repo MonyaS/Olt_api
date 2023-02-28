@@ -49,7 +49,7 @@ def Auth(request):
                 response.append(temp)
             return return_response(response, cookie, user_name)
 
-        elif request.method == 'CREATE_USER' and user.is_superuser:
+        elif request.method == 'CREATE_USER'and user.is_superuser:
             serializer = UserSerializer(data=user_data)
             if serializer.is_valid():
                 serializer.save()

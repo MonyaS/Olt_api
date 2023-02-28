@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import rest_framework
 import jwt
 from bson.objectid import ObjectId
 from dictdiffer import diff
@@ -9,7 +8,8 @@ from rest_framework.parsers import JSONParser
 
 from OLT.settings import SECRET_KEY
 from base_connection import get_db_handle
-from main.models import User
+from main.models import User, Olt
+from main.serializers import OLTSerializer
 from main.auth import return_response
 
 
@@ -32,44 +32,52 @@ def OLTApi(request):
             cookie = user.token
 
         if request.method == 'GET_OLTS':
+            data = Olt.objects.values()
             response = []
-            for temp in list(get_db_handle().find({}, {'ip': True})):
-                temp['_id'] = str(temp['_id'])
+            for temp in data:
                 response.append(temp)
             return return_response(response, cookie, user_name)
 
         if request.method == 'GET_OLT':
-            response = get_db_handle().find({"_id": ObjectId(olt_data["_id"])}, {'_id': False})
-            if user.can_edit:
-                try:
-                    response.pop("access")
-                except:
-                    pass
-            return return_response(list(response), cookie, user_name)
-
+            olt = Olt.objects.filter(ip=olt_data["ip"]).first().__dict__
+            if not user.can_edit:
+                olt.pop("ip")
+                olt.pop("login")
+                olt.pop("password")
+            return return_response(olt, cookie, user_name)
+        
         elif request.method == 'CREATE_OLT' and user.can_edit:
-            if not list(get_db_handle().find({'ip': olt_data['ip']})):
-                if olt_data['login'] and olt_data['password']:
-                    status = get_db_handle().insert_one(olt_data)
-                    return return_response(f"OLT added successfully.{status}", cookie, user_name)
+            serializer = OLTSerializer(data=olt_data)
+            if serializer.is_valid():
+                serializer.save()
+                return return_response(f"OLT added successfully.", cookie, user_name)
             else:
+                print(serializer.errors)
+                #вывод  при неправильных данных???????????????
                 return return_response("Fail to add OLT. This ip already exists.", cookie, user_name)
 
         elif request.method == 'UPDATE_OLT' and user.can_edit:
-            result = diff(get_db_handle().find_one({"_id": ObjectId(olt_data["_id"])}, {'_id': False}), olt_data)
-            id = olt_data.pop("_id")
-            get_db_handle().replace_one({"_id": ObjectId(id)}, olt_data)
-            return return_response(list(result), cookie, user_name)
+            edit_olt = Olt.objects.filter(_id=olt_data["_id"]).first()
+            if edit_olt:
+                edit_olt.__dict__.update(olt_data)
+                edit_olt.save()
+                return return_response("Successfully edit", cookie, user_name)
+            else:
+                return return_response("Wrong data.", cookie, user_name)
 
         elif request.method == 'DELETE_OLT' and user.can_edit:
-            response = get_db_handle().delete_one({"_id": ObjectId(olt_data["Id"])}).deleted_count
-            return return_response(f"Deleted {response} object.", cookie, user_name)
+            delete_olt = Olt.objects.filter(_id=olt_data["_id"]).first()
+            if delete_olt:
+                delete_olt.delete()
+                return return_response("Successfully delete.", cookie, user_name)
+            else:
+                return return_response("User is not found.", cookie, user_name)
 
         else:
             return return_response("Method is not defined.", cookie, user_name)
     except KeyError:
-        return JsonResponse("Some data is wrong.", safe=False)
+        return JsonResponse("Some data is wrong.", safe=False, status=500)
     except (jwt.exceptions.DecodeError,jwt.exceptions.InvalidTokenError, AttributeError):
-        return JsonResponse("Invalid token.", safe=False)
+        return JsonResponse("Invalid token.", safe=False, status=401)
     except Exception as err:
-        return JsonResponse(f"An error occurred: {err}", safe=False)
+        return JsonResponse(f"An error occurred: {err}", safe=False, status=500)
